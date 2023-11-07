@@ -1,0 +1,88 @@
+version: '3'
+services:
+
+  power-plant-construction-postgres:
+    image: postgres:14-alpine
+    container_name: power-plant-construction-postgres
+    networks:
+      - power-plant-construction-infra
+    ports:
+      - 25433:25433
+    volumes:
+      - power-plant-construction-local_docker_compose-postgres_data:/var/lib/postgresql/data
+    env_file: .env.docker-compose.local
+    command: -p 25433
+
+  power-plant-construction-local-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env.docker-compose.local
+    command: 'sh -c "sleep 4 && python manage.py db-migrate"'
+    networks:
+      - power-plant-construction-infra
+    depends_on:
+      - power-plant-construction-postgres
+      - power-plant-construction-nats
+
+  power-plant-construction-hometask-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env.docker-compose.local
+    command: 'sh -c "sleep 5 && python manage.py init-hometask"'
+    networks:
+      - power-plant-construction-infra
+    depends_on:
+      - power-plant-construction-postgres
+      - power-plant-construction-nats
+      - power-plant-construction-local-init
+      - power-plant-construction-local-app
+
+  power-plant-construction-local-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env.docker-compose.local
+    command: 'sh -c "sleep 4 && python manage.py start-api"'
+    networks:
+      - power-plant-construction-infra
+    depends_on:
+      - power-plant-construction-postgres
+      - power-plant-construction-nats
+      - power-plant-construction-local-init
+    ports:
+      - 8080:8080
+
+  power-plant-construction-local-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env.docker-compose.local
+    command: 'sh -c "sleep 4 && python manage.py start-app"'
+    networks:
+      - power-plant-construction-infra
+    depends_on:
+      - power-plant-construction-postgres
+      - power-plant-construction-nats
+      - power-plant-construction-local-init
+
+  power-plant-construction-nats:
+    image: nats:2.8.4-alpine
+    env_file: .env.docker-compose.local
+    command: 
+      - "-p"
+      - "24223"
+    networks:
+      - power-plant-construction-infra
+    ports:
+      - "24223:24223"
+    hostname: nats-server
+
+networks:
+  power-plant-construction-infra:
+    driver: bridge
+
+volumes:
+  power-plant-construction-local_docker_compose-postgres_data:
+    driver: local
